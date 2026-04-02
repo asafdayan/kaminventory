@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>השאלה חדשה</h2>
+<form method="post" class="card">
+  <label>מי חותם?
+    <select name="borrower_user_id" required>
+      {% for user in users %}
+      <option value="{{ user.id }}">{{ user.full_name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>סט להשאלה (אופציונלי)
+    <select name="kit_id">
+      <option value="">ללא סט</option>
+      {% for kit in kits %}
+      <option value="{{ kit.id }}">{{ kit.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <p>אם בחרת סט: בחר/י למטה אילו פריטים באמת נלקחו. ברירת המחדל היא כל הפריטים.</p>
+
+  {% for kit in kits %}
+  <fieldset>
+    <legend>פריטי הסט: {{ kit.name }}</legend>
+    {% for item in kit_items_map[kit.id] %}
+      <label>
+        <input type="checkbox" name="kit_item_ids_{{ kit.id }}" value="{{ item.id }}" checked />
+        {{ item.name }} ({{ item.serial_number }})
+      </label>
+    {% else %}
+      <p>אין פריטים בסט זה</p>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
+
+  <fieldset>
+    <legend>פריטי אקסטרא/מיוחדים (אופציונלי)</legend>
+    {% for item in standalone_items %}
+      <label><input type="checkbox" name="extra_item_ids" value="{{ item.id }}" /> {{ item.name }} ({{ item.serial_number }})</label>
+    {% else %}
+      <p>אין פריטי אקסטרא זמינים כרגע</p>
+    {% endfor %}
+  </fieldset>
+
+  <label>הערות <textarea name="notes"></textarea></label>
+  <button type="submit">חתימה / יצירת השאלה</button>
+</form>
+{% endblock %}

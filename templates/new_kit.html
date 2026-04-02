@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>יצירת סט חדש</h2>
+<form method="post" class="card">
+  <label>שם הסט <input name="name" required /></label>
+  <label>הערות <textarea name="notes"></textarea></label>
+  <button type="submit">שמור</button>
+</form>
+{% endblock %}

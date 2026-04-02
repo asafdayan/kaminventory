@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>הציוד שעל שמי</h2>
+<section class="card">
+  <h3>השאלות פעילות</h3>
+  <ul>
+    {% for loan in loans %}
+      <li>#{{ loan.id }} | {{ loan.kit_name or 'ללא סט' }} | {{ loan.signed_at }}</li>
+    {% else %}
+      <li>אין השאלות פעילות</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h3>פריטים רשומים על שמי כרגע</h3>
+  <ul>
+    {% for item in items %}
+      <li>{{ item.name }} ({{ item.serial_number }}) {% if item.kit_name %}- מתוך {{ item.kit_name }}{% else %}- פריט אקסטרא{% endif %}</li>
+    {% else %}
+      <li>אין פריטים רשומים</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
