@@ -169,6 +169,7 @@ def index():
     active_loans = db.execute(
         """
         SELECT l.id, l.signed_at, l.is_exception, u.full_name AS borrower_name, k.name AS kit_name
+        SELECT l.id, l.signed_at, u.full_name AS borrower_name, k.name AS kit_name
         FROM loans l
         JOIN users u ON u.id = l.borrower_user_id
         LEFT JOIN kits k ON k.id = l.kit_id
@@ -197,6 +198,8 @@ def register():
             db.execute(
                 "INSERT INTO users (username, full_name, password_hash, is_admin, created_at) VALUES (?,?,?,?,?)",
                 (username, full_name, generate_password_hash(password), int(request.form.get("is_admin") == "on"), now_iso()),
+                "INSERT INTO users (username, full_name, password_hash, created_at) VALUES (?,?,?,?)",
+                (username, full_name, generate_password_hash(password), now_iso()),
             )
             db.commit()
             flash("המשתמש נוצר בהצלחה", "success")
@@ -318,6 +321,13 @@ def new_loan():
         ORDER BY k.name
     """
     kits = db.execute(kits_query).fetchall()
+    kits = db.execute(
+        """
+        SELECT k.* FROM kits k
+        WHERE NOT EXISTS (SELECT 1 FROM loans l WHERE l.kit_id=k.id AND l.status='active')
+        ORDER BY k.name
+        """
+    ).fetchall()
     kit_items_map = {
         kit["id"]: db.execute("SELECT id, name, serial_number FROM items WHERE kit_id=? ORDER BY name", (kit["id"],)).fetchall()
         for kit in kits
@@ -368,11 +378,25 @@ def new_loan():
             VALUES (?,?,?,?,?,?,?, 'active')
             """,
             (borrower_user_id, kit_id, session["user_id"], now_iso(), notes, is_exception, exception_note),
+
+        if not kit_id and not extra_item_ids:
+            flash("יש לבחור לפחות סט אחד או פריט אקסטרא אחד", "error")
+            return render_template("new_loan.html", users=users, kits=kits, standalone_items=standalone_items)
+
+        cur = db.execute(
+            """
+            INSERT INTO loans (borrower_user_id, kit_id, signed_by_user_id, signed_at, notes, status)
+            VALUES (?,?,?,?,?, 'active')
+            """,
+            (borrower_user_id, kit_id, session["user_id"], now_iso(), notes),
         )
         loan_id = cur.lastrowid
 
         item_ids = set(extra_item_ids)
         item_ids.update(selected_kit_item_ids)
+        if kit_id:
+            kit_items = db.execute("SELECT id FROM items WHERE kit_id=?", (kit_id,)).fetchall()
+            item_ids.update(row["id"] for row in kit_items)
 
         for item_id in item_ids:
             db.execute("INSERT INTO loan_items (loan_id, item_id) VALUES (?,?)", (loan_id, item_id))
@@ -388,6 +412,7 @@ def new_loan():
         standalone_items=standalone_items,
         kit_items_map=kit_items_map,
     )
+    return render_template("new_loan.html", users=users, kits=kits, standalone_items=standalone_items)
 
 
 @app.route("/loans/<int:loan_id>/return", methods=["GET", "POST"])
