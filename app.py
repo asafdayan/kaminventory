@@ -69,8 +69,6 @@ def init_db():
             returned_at TEXT NULL,
             return_processed_by_user_id INTEGER NULL,
             notes TEXT,
-            is_exception INTEGER NOT NULL DEFAULT 0,
-            exception_note TEXT,
             status TEXT NOT NULL CHECK(status IN ('active','closed')),
             FOREIGN KEY (borrower_user_id) REFERENCES users(id),
             FOREIGN KEY (kit_id) REFERENCES kits(id),
@@ -89,16 +87,6 @@ def init_db():
         );
         """
     )
-    user_cols = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
-    if "is_admin" not in user_cols:
-        db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
-
-    loan_cols = {row[1] for row in db.execute("PRAGMA table_info(loans)").fetchall()}
-    if "is_exception" not in loan_cols:
-        db.execute("ALTER TABLE loans ADD COLUMN is_exception INTEGER NOT NULL DEFAULT 0")
-    if "exception_note" not in loan_cols:
-        db.execute("ALTER TABLE loans ADD COLUMN exception_note TEXT")
-
     db.commit()
     db.close()
 
@@ -169,6 +157,7 @@ def index():
     active_loans = db.execute(
         """
         SELECT l.id, l.signed_at, l.is_exception, u.full_name AS borrower_name, k.name AS kit_name
+        SELECT l.id, l.signed_at, u.full_name AS borrower_name, k.name AS kit_name
         FROM loans l
         JOIN users u ON u.id = l.borrower_user_id
         LEFT JOIN kits k ON k.id = l.kit_id
@@ -197,6 +186,8 @@ def register():
             db.execute(
                 "INSERT INTO users (username, full_name, password_hash, is_admin, created_at) VALUES (?,?,?,?,?)",
                 (username, full_name, generate_password_hash(password), int(request.form.get("is_admin") == "on"), now_iso()),
+                "INSERT INTO users (username, full_name, password_hash, created_at) VALUES (?,?,?,?)",
+                (username, full_name, generate_password_hash(password), now_iso()),
             )
             db.commit()
             flash("המשתמש נוצר בהצלחה", "success")
@@ -369,11 +360,25 @@ def new_loan():
             VALUES (?,?,?,?,?,?,?, 'active')
             """,
             (borrower_user_id, kit_id, session["user_id"], now_iso(), notes, is_exception, exception_note),
+
+        if not kit_id and not extra_item_ids:
+            flash("יש לבחור לפחות סט אחד או פריט אקסטרא אחד", "error")
+            return render_template("new_loan.html", users=users, kits=kits, standalone_items=standalone_items)
+
+        cur = db.execute(
+            """
+            INSERT INTO loans (borrower_user_id, kit_id, signed_by_user_id, signed_at, notes, status)
+            VALUES (?,?,?,?,?, 'active')
+            """,
+            (borrower_user_id, kit_id, session["user_id"], now_iso(), notes),
         )
         loan_id = cur.lastrowid
 
         item_ids = set(extra_item_ids)
         item_ids.update(selected_kit_item_ids)
+        if kit_id:
+            kit_items = db.execute("SELECT id FROM items WHERE kit_id=?", (kit_id,)).fetchall()
+            item_ids.update(row["id"] for row in kit_items)
 
         for item_id in item_ids:
             db.execute("INSERT INTO loan_items (loan_id, item_id) VALUES (?,?)", (loan_id, item_id))
@@ -389,6 +394,7 @@ def new_loan():
         standalone_items=standalone_items,
         kit_items_map=kit_items_map,
     )
+    return render_template("new_loan.html", users=users, kits=kits, standalone_items=standalone_items)
 
 
 @app.route("/loans/<int:loan_id>/return", methods=["GET", "POST"])
