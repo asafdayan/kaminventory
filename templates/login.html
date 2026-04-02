@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>התחברות</h2>
+<form method="post" class="card">
+  <label>שם משתמש <input name="username" required /></label>
+  <label>סיסמה <input name="password" type="password" required /></label>
+  <button type="submit">התחבר</button>
+</form>
+<p>אין משתמש? <a href="{{ url_for('register') }}">הרשמה</a></p>
+{% endblock %}

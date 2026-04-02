@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kami Inventory</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+<header>
+  <h1>Kami Inventory</h1>
+  {% if current_user %}
+  <nav>
+    <a href="{{ url_for('index') }}">דשבורד</a>
+    <a href="{{ url_for('new_kit') }}">סט חדש</a>
+    <a href="{{ url_for('new_item') }}">פריט חדש</a>
+    <a href="{{ url_for('new_loan') }}">השאלה חדשה</a>
+    <a href="{{ url_for('my_signatures') }}">הציוד שעל שמי</a>
+    <a href="{{ url_for('logout') }}">התנתקות</a>
+  </nav>
+  {% endif %}
+</header>
+
+<main>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
