@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>הרשמה</h2>
+<form method="post" class="card">
+  <label>שם מלא <input name="full_name" required /></label>
+  <label>שם משתמש <input name="username" required /></label>
+  <label>סיסמה <input name="password" type="password" required /></label>
+  <label><input type="checkbox" name="is_admin" /> משתמש מנהל</label>
+  <button type="submit">צור משתמש</button>
+</form>
+{% endblock %}

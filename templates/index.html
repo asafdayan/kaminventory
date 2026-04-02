@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>דשבורד</h2>
+
+<section class="card">
+  <h3>השאלות פעילות</h3>
+  <ul>
+    {% for loan in active_loans %}
+      <li>
+        {{ loan.borrower_name }} | {{ loan.kit_name or 'ללא סט (ציוד בודד)' }} | {{ loan.signed_at }}
+        {% if loan.is_exception %}<strong>חריג: קיט לא מלא</strong>{% endif %}
+        <a href="{{ url_for('return_loan', loan_id=loan.id) }}">זיכוי / החזרה</a>
+      </li>
+    {% else %}
+      <li>אין השאלות פעילות</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h3>סטים</h3>
+  <ul>
+    {% for kit in kits %}
+      <li>{{ kit.name }} {% if kit.is_loaned %}(מושאל){% else %}(זמין){% endif %}</li>
+    {% else %}
+      <li>אין סטים</li>
+    {% endfor %}
+  </ul>
+</section>
+
+<section class="card">
+  <h3>ציוד לא משויך לסט</h3>
+  <ul>
+    {% for item in unassigned_items %}
+      <li>{{ item.name }} ({{ item.serial_number }}) {% if item.is_loaned %}(מושאל){% else %}(זמין){% endif %}</li>
+    {% else %}
+      <li>אין ציוד אקסטרא</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}
