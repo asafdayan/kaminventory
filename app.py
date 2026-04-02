@@ -69,6 +69,8 @@ def init_db():
             returned_at TEXT NULL,
             return_processed_by_user_id INTEGER NULL,
             notes TEXT,
+            is_exception INTEGER NOT NULL DEFAULT 0,
+            exception_note TEXT,
             status TEXT NOT NULL CHECK(status IN ('active','closed')),
             FOREIGN KEY (borrower_user_id) REFERENCES users(id),
             FOREIGN KEY (kit_id) REFERENCES kits(id),
@@ -87,6 +89,16 @@ def init_db():
         );
         """
     )
+    user_cols = {row[1] for row in db.execute("PRAGMA table_info(users)").fetchall()}
+    if "is_admin" not in user_cols:
+        db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+
+    loan_cols = {row[1] for row in db.execute("PRAGMA table_info(loans)").fetchall()}
+    if "is_exception" not in loan_cols:
+        db.execute("ALTER TABLE loans ADD COLUMN is_exception INTEGER NOT NULL DEFAULT 0")
+    if "exception_note" not in loan_cols:
+        db.execute("ALTER TABLE loans ADD COLUMN exception_note TEXT")
+
     db.commit()
     db.close()
 
@@ -303,6 +315,12 @@ def new_item():
 def new_loan():
     db = get_db()
     users = db.execute("SELECT id, full_name FROM users ORDER BY full_name").fetchall()
+    kits_query = """
+        SELECT k.* FROM kits k
+        WHERE NOT EXISTS (SELECT 1 FROM loans l WHERE l.kit_id=k.id AND l.status='active')
+        ORDER BY k.name
+    """
+    kits = db.execute(kits_query).fetchall()
     kits = db.execute(
         """
         SELECT k.* FROM kits k
