@@ -1,3 +1,4 @@
+from app import app, init_db
 from app import app, init_db, DB_PATH
 
 
@@ -11,5 +12,7 @@ def test_init_db_creates_file(tmp_path, monkeypatch):
 def test_register_and_login_pages_load():
     app.config.update(TESTING=True)
     with app.test_client() as client:
+        assert client.get("/login").status_code == 200
+        assert client.get("/setup-admin").status_code == 200
         assert client.get("/register").status_code == 200
         assert client.get("/login").status_code == 200

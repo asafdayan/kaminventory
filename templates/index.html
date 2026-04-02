@@ -8,6 +8,7 @@
     {% for loan in active_loans %}
       <li>
         {{ loan.borrower_name }} | {{ loan.kit_name or 'ללא סט (ציוד בודד)' }} | {{ loan.signed_at }}
+        {% if loan.is_exception %}<strong>חריג: קיט לא מלא</strong>{% endif %}
         <a href="{{ url_for('return_loan', loan_id=loan.id) }}">זיכוי / החזרה</a>
       </li>
     {% else %}

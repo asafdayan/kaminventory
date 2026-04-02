@@ -12,6 +12,10 @@
   {% if current_user %}
   <nav>
     <a href="{{ url_for('index') }}">דשבורד</a>
+    {% if current_user.is_admin %}
+    <a href="{{ url_for('register') }}">משתמש חדש</a>
+    <a href="{{ url_for('new_kit') }}">סט חדש</a>
+    {% endif %}
     <a href="{{ url_for('new_kit') }}">סט חדש</a>
     <a href="{{ url_for('new_item') }}">פריט חדש</a>
     <a href="{{ url_for('new_loan') }}">השאלה חדשה</a>

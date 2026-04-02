@@ -18,6 +18,21 @@
       {% endfor %}
     </select>
   </label>
+  <p>אם בחרת סט: בחר/י למטה אילו פריטים באמת נלקחו. ברירת המחדל היא כל הפריטים.</p>
+
+  {% for kit in kits %}
+  <fieldset>
+    <legend>פריטי הסט: {{ kit.name }}</legend>
+    {% for item in kit_items_map[kit.id] %}
+      <label>
+        <input type="checkbox" name="kit_item_ids_{{ kit.id }}" value="{{ item.id }}" checked />
+        {{ item.name }} ({{ item.serial_number }})
+      </label>
+    {% else %}
+      <p>אין פריטים בסט זה</p>
+    {% endfor %}
+  </fieldset>
+  {% endfor %}
 
   <fieldset>
     <legend>פריטי אקסטרא/מיוחדים (אופציונלי)</legend>

@@ -38,6 +38,7 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             full_name TEXT NOT NULL,
             password_hash TEXT NOT NULL,
+            is_admin INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
 
@@ -100,6 +101,20 @@ def login_required(view):
     return wrapped
 
 
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        user = get_db().execute("SELECT is_admin FROM users WHERE id=?", (session["user_id"],)).fetchone()
+        if not user or user["is_admin"] != 1:
+            flash("הפעולה מותרת למנהל בלבד", "error")
+            return redirect(url_for("index"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
 def now_iso() -> str:
     return datetime.utcnow().isoformat(timespec="seconds")
 
@@ -141,6 +156,7 @@ def index():
 
     active_loans = db.execute(
         """
+        SELECT l.id, l.signed_at, l.is_exception, u.full_name AS borrower_name, k.name AS kit_name
         SELECT l.id, l.signed_at, u.full_name AS borrower_name, k.name AS kit_name
         FROM loans l
         JOIN users u ON u.id = l.borrower_user_id
@@ -154,6 +170,8 @@ def index():
 
 
 @app.route("/register", methods=["GET", "POST"])
+@login_required
+@admin_required
 def register():
     if request.method == "POST":
         username = request.form["username"].strip()
@@ -166,6 +184,8 @@ def register():
         db = get_db()
         try:
             db.execute(
+                "INSERT INTO users (username, full_name, password_hash, is_admin, created_at) VALUES (?,?,?,?,?)",
+                (username, full_name, generate_password_hash(password), int(request.form.get("is_admin") == "on"), now_iso()),
                 "INSERT INTO users (username, full_name, password_hash, created_at) VALUES (?,?,?,?)",
                 (username, full_name, generate_password_hash(password), now_iso()),
             )
@@ -176,6 +196,33 @@ def register():
             flash("שם המשתמש כבר קיים", "error")
 
     return render_template("register.html")
+
+
+@app.route("/setup-admin", methods=["GET", "POST"])
+def setup_admin():
+    db = get_db()
+    has_users = db.execute("SELECT 1 FROM users LIMIT 1").fetchone() is not None
+    if has_users:
+        flash("כבר קיים משתמש במערכת. יצירת משתמשים נוספים דרך מנהל בלבד", "error")
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        username = request.form["username"].strip()
+        full_name = request.form["full_name"].strip()
+        password = request.form["password"]
+        if not username or not full_name or not password:
+            flash("יש למלא את כל השדות", "error")
+            return render_template("setup_admin.html")
+
+        db.execute(
+            "INSERT INTO users (username, full_name, password_hash, is_admin, created_at) VALUES (?,?,?,?,?)",
+            (username, full_name, generate_password_hash(password), 1, now_iso()),
+        )
+        db.commit()
+        flash("מנהל ראשי נוצר בהצלחה. ניתן להתחבר", "success")
+        return redirect(url_for("login"))
+
+    return render_template("setup_admin.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -203,6 +250,7 @@ def logout():
 
 @app.route("/kits/new", methods=["GET", "POST"])
 @login_required
+@admin_required
 def new_kit():
     if request.method == "POST":
         name = request.form["name"].strip()
@@ -262,6 +310,10 @@ def new_loan():
         ORDER BY k.name
         """
     ).fetchall()
+    kit_items_map = {
+        kit["id"]: db.execute("SELECT id, name, serial_number FROM items WHERE kit_id=? ORDER BY name", (kit["id"],)).fetchall()
+        for kit in kits
+    }
     standalone_items = db.execute(
         """
         SELECT i.* FROM items i
@@ -279,6 +331,35 @@ def new_loan():
         kit_id = int(kit_id) if kit_id else None
         extra_item_ids = [int(x) for x in request.form.getlist("extra_item_ids")]
         notes = request.form.get("notes", "").strip()
+        exception_note = None
+
+        selected_kit_item_ids = []
+        all_kit_item_ids = []
+        if kit_id:
+            all_kit_item_ids = [row["id"] for row in kit_items_map.get(kit_id, [])]
+            selected_kit_item_ids = [int(x) for x in request.form.getlist(f"kit_item_ids_{kit_id}")]
+            selected_kit_item_ids = [item_id for item_id in selected_kit_item_ids if item_id in all_kit_item_ids]
+
+        if not selected_kit_item_ids and not extra_item_ids:
+            flash("יש לבחור לפחות סט אחד או פריט אקסטרא אחד", "error")
+            return render_template(
+                "new_loan.html",
+                users=users,
+                kits=kits,
+                standalone_items=standalone_items,
+                kit_items_map=kit_items_map,
+            )
+
+        is_exception = 1 if kit_id and len(selected_kit_item_ids) < len(all_kit_item_ids) else 0
+        if is_exception:
+            exception_note = "חתימה חלקית על קיט: לא כל הפריטים נחתמו"
+
+        cur = db.execute(
+            """
+            INSERT INTO loans (borrower_user_id, kit_id, signed_by_user_id, signed_at, notes, is_exception, exception_note, status)
+            VALUES (?,?,?,?,?,?,?, 'active')
+            """,
+            (borrower_user_id, kit_id, session["user_id"], now_iso(), notes, is_exception, exception_note),
 
         if not kit_id and not extra_item_ids:
             flash("יש לבחור לפחות סט אחד או פריט אקסטרא אחד", "error")
@@ -294,6 +375,7 @@ def new_loan():
         loan_id = cur.lastrowid
 
         item_ids = set(extra_item_ids)
+        item_ids.update(selected_kit_item_ids)
         if kit_id:
             kit_items = db.execute("SELECT id FROM items WHERE kit_id=?", (kit_id,)).fetchall()
             item_ids.update(row["id"] for row in kit_items)
@@ -305,6 +387,13 @@ def new_loan():
         flash("השאלה נרשמה", "success")
         return redirect(url_for("index"))
 
+    return render_template(
+        "new_loan.html",
+        users=users,
+        kits=kits,
+        standalone_items=standalone_items,
+        kit_items_map=kit_items_map,
+    )
     return render_template("new_loan.html", users=users, kits=kits, standalone_items=standalone_items)
 
 
